@@ -93,7 +93,7 @@ docs/dev
 *.sst
 *.ldb
 LOCK
-LOG*
+#LOG*
 CURRENT
 MANIFEST-*
 
