@@ -3,8 +3,70 @@
 #include "caffe/filler.hpp"
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/kmeans.hpp"
 
 namespace caffe {
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::ComputeBlobMask()
+{
+  //  LOG(INFO) << "inner blobmask"<<endl;
+  int count = this->blobs()[0]->count();
+  //this->masks_.resize(count);
+
+  //this->indices_.resize(count);
+  //this->centroids_.resize(this->class_num_);
+
+  //calculate min max value of weight
+  const Dtype* weight = this->blobs_[0]->cpu_data();
+  int *mask_data = this->masks_.mutable_cpu_data();
+  //Dtype min_weight = weight[0], max_weight = weight[0];
+  vector<Dtype> sort_weight(count);
+
+  for (int i = 0; i < count; ++i)
+  {
+   //this->masks_[i] = 1; //initialize
+     sort_weight[i] = fabs(weight[i]);
+  }
+
+  sort(sort_weight.begin(), sort_weight.end());
+  
+  //max_weight = sort_weight[count - 1];
+  float ratio = this->sparse_ratio_;
+  //cout << sort_weight[0] << " " << sort_weight[count - 1] << endl;
+  int index = int(count*ratio);
+  Dtype thr ;
+  Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+  float rat = 0;
+  if(index >0) {
+  thr = sort_weight[index - 1];
+  //thr = ratio;
+  LOG(INFO) << "THR: "<<thr<<endl ;
+
+  for (int i = 0; i < count; ++i)
+  {
+    mask_data[i] =  ((weight[i] > thr || weight[i] < -thr) ? 1 : 0) ;
+    muweight[i] *= mask_data[i];
+   rat += (1-mask_data[i]) ;
+  }
+  }
+  else {
+      for (int i = 0; i < count; ++i)
+      {    
+         mask_data[i]  = (weight[i]== 0 ? 0 : 1);
+         rat += (1-mask_data[i]) ;
+      } 
+  }
+  LOG(INFO) << "sparsity: "<< rat/count <<endl;
+  //min_weight = sort_weight[index];
+    
+  if(this->quantize_term_)
+  {
+    int nCentroid = this->class_num_;
+
+    kmeans_cluster(this->indices_.mutable_cpu_data(), this->centroids_.mutable_cpu_data(), muweight, count, mask_data/*this->masks_*/, /*max_weight, min_weight,*/ nCentroid, 1000);
+  }                                                  
+}
 
 template <typename Dtype>
 void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,

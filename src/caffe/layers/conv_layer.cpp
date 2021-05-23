@@ -93,13 +93,23 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   
   //add by cj=========
-  Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-  // const int *mask_data = this->masks_.cpu_data();
+   Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+  const int *mask_data = this->masks_.cpu_data();
   int count = this->blobs_[0]->count();
   //vector<Dtype> sort_weight(count);
   for (int i = 0; i < count; ++i)
-    if (this->masks_[i])
-      muweight[i] = this->centroids_[this->indices_[i]];
+    muweight[i] *= mask_data[i] ;
+  
+  if(this->quantize_term_)
+  {
+    const Dtype *cent_data = this->centroids_.cpu_data();
+    const int *indice_data = this->indices_.cpu_data();
+    for (int i = 0; i < count; ++i)
+    {
+       if (mask_data[i])
+         muweight[i] = cent_data[indice_data[i]];
+    }
+  }
   //========
 
   const Dtype* weight = this->blobs_[0]->cpu_data();
@@ -145,23 +155,29 @@ void ConvolutionLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
         //add by cj========
         Dtype* weight_diff = this->blobs_[0]->mutable_cpu_diff();
-        // const int *mask_data = this->masks_.cpu_data();
+        const int *mask_data = this->masks_.cpu_data();
         for (int j = 0; j < count; ++j)
-          weight_diff[j] *=  this->masks_[j];
-        vector<Dtype> tmpDiff(CONV_QUNUM);
-        vector<int> freq((CONV_QUNUM);
-        for (int j = 0; j < count; ++j)
+          weight_diff[j] *=  mask_data[j];
+
+        if(this->quantize_term_)
         {
-          if (this->masks_[j])
+	        vector<Dtype> tmpDiff(this->class_num_);
+          vector<int> freq(this->class_num_);
+          const int *indice_data = this->indices_.cpu_data();
+
+          for (int j = 0; j < count; ++j)
           {
-            tmpDiff[this->indices_[j]] += weight_diff[j];
-            freq[this->indices_[j]]++;
+            if (mask_data[j])
+            {
+              tmpDiff[indice_data[j]] += weight_diff[j];
+              freq[indice_data[j]]++;
+            }
           }
-        }
-        for (int j = 0; j < count; ++j)
-        {
-          if (this->masks_[j])
-            weight_diff[j] = tmpDiff[this->indices_[j]] / freq[this->indices_[j]];
+          for (int j = 0; j < count; ++j)
+          {
+            if (mask_data[j])
+              weight_diff[j] = tmpDiff[indice_data[j]] / freq[indice_data[j]];
+          }
         }
         //============
 
