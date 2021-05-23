@@ -294,6 +294,8 @@ class Layer {
     return true;
   }
 
+  virtual void ComputeBlobMask() {}
+
   /**
    * @brief Specifies whether the layer should compute gradients w.r.t. a
    *        parameter at a particular index given by param_id.
@@ -330,6 +332,15 @@ class Layer {
   /** The vector that indicates whether each top blob has a non-zero weight in
    *  the objective function. */
   vector<Dtype> loss_;
+
+  //vector<int> masks_;
+  Blob<int> masks_;
+ 
+  Blob<int> indices_;
+  //vector<int> indices_;
+
+  Blob<Dtype> centroids_;
+  //vector<Dtype> centroids_;
 
   /** @brief Using the CPU device, compute the layer output. */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
