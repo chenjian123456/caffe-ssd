@@ -92,6 +92,26 @@ template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   
+  //add by cj=========
+  Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+  const int *mask_data = this->masks_.cpu_data();
+  int count = this->blobs_[0]->count();
+  //vector<Dtype> sort_weight(count);
+  for (int i = 0; i < count; ++i)
+    muweight[i] *= mask_data[i] ;
+  
+  if(this->quantize_term_)
+  {
+    const Dtype *cent_data = this->centroids_.cpu_data();
+    const int *indice_data = this->indices_.cpu_data();
+    for (int i = 0; i < count; ++i)
+    {
+       if (mask_data[i])
+         muweight[i] = cent_data[indice_data[i]];
+    }
+  }
+  //========
+
   const Dtype* weight = this->blobs_[0]->cpu_data();
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
@@ -132,6 +152,35 @@ void ConvolutionLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           this->weight_cpu_gemm(bottom_data + n * this->bottom_dim_,
               top_diff + n * this->top_dim_, weight_diff);
         }
+
+        //add by cj========
+        Dtype* weight_diff = this->blobs_[0]->mutable_cpu_diff();
+        const int *mask_data = this->masks_.cpu_data();
+        for (int j = 0; j < count; ++j)
+          weight_diff[j] *=  mask_data[j];
+
+        if(this->quantize_term_)
+        {
+	        vector<Dtype> tmpDiff(this->class_num_);
+          vector<int> freq(this->class_num_);
+          const int *indice_data = this->indices_.cpu_data();
+
+          for (int j = 0; j < count; ++j)
+          {
+            if (mask_data[j])
+            {
+              tmpDiff[indice_data[j]] += weight_diff[j];
+              freq[indice_data[j]]++;
+            }
+          }
+          for (int j = 0; j < count; ++j)
+          {
+            if (mask_data[j])
+              weight_diff[j] = tmpDiff[indice_data[j]] / freq[indice_data[j]];
+          }
+        }
+        //============
+
         // gradient w.r.t. bottom data, if necessary.
         if (propagate_down[i]) {
           this->backward_cpu_gemm(top_diff + n * this->top_dim_, weight,

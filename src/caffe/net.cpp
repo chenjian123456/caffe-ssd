@@ -785,6 +785,8 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
       const bool kReshape = false;
       target_blobs[j]->FromProto(source_layer.blobs(j), kReshape);
     }
+    //add by cj=========
+    layers_[target_layer_id]->ComputeBlobMask();
   }
 }
 
